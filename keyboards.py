@@ -1,4 +1,4 @@
-from typing import Any, Iterable, Optional
+from typing import Any, Iterable, List, Optional
 
 from aiogram.types import InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from aiogram.utils.keyboard import InlineKeyboardBuilder
@@ -10,6 +10,7 @@ BTN_CHANNELS = "Kanallar"
 BTN_CARDS = "Kartalar"
 BTN_SETTINGS = "Sozlamalar"
 BTN_ADMINS = "Adminlar"
+BTN_MENUS = "Menyular"
 BTN_BACK = "Orqaga"
 BTN_EXIT = "Paneldan chiqish"
 
@@ -30,6 +31,10 @@ BTN_SETTING_LIST = "Sozlamalar holati"
 BTN_ADMIN_ADD = "Admin qo'shish"
 BTN_ADMIN_REMOVE = "Admin o'chirish"
 BTN_ADMIN_LIST = "Adminlar ro'yxati"
+
+BTN_CUSTOM_MENU_ADD = "Menyu qo'shish"
+BTN_CUSTOM_MENU_REMOVE = "Menyu o'chirish"
+BTN_CUSTOM_MENU_LIST = "Menyular ro'yxati"
 
 BTN_PROFILE = "Profil"
 BTN_DELETE_DATA = "Ma'lumotlarni o'chirish"
@@ -88,7 +93,8 @@ def admin_main_menu_keyboard() -> ReplyKeyboardMarkup:
         keyboard=[
             [KeyboardButton(text=BTN_STATS), KeyboardButton(text=BTN_CHANNELS)],
             [KeyboardButton(text=BTN_CARDS), KeyboardButton(text=BTN_SETTINGS)],
-            [KeyboardButton(text=BTN_ADMINS), KeyboardButton(text=BTN_EXIT)],
+            [KeyboardButton(text=BTN_MENUS), KeyboardButton(text=BTN_ADMINS)],
+            [KeyboardButton(text=BTN_EXIT)],
         ],
         resize_keyboard=True,
     )
@@ -104,9 +110,14 @@ def admin_entry_keyboard() -> ReplyKeyboardMarkup:
 def user_main_menu_keyboard(
     profile_button_text: str = BTN_PROFILE,
     delete_button_text: str = BTN_DELETE_DATA,
+    extra_buttons: Optional[List[str]] = None,
 ) -> ReplyKeyboardMarkup:
+    keyboard = [[KeyboardButton(text=profile_button_text), KeyboardButton(text=delete_button_text)]]
+    for title in extra_buttons or []:
+        keyboard.append([KeyboardButton(text=title)])
+
     return ReplyKeyboardMarkup(
-        keyboard=[[KeyboardButton(text=profile_button_text), KeyboardButton(text=delete_button_text)]],
+        keyboard=keyboard,
         resize_keyboard=True,
     )
 
@@ -165,6 +176,16 @@ def admin_admins_menu_keyboard() -> ReplyKeyboardMarkup:
         keyboard=[
             [KeyboardButton(text=BTN_ADMIN_ADD), KeyboardButton(text=BTN_ADMIN_REMOVE)],
             [KeyboardButton(text=BTN_ADMIN_LIST), KeyboardButton(text=BTN_BACK)],
+        ],
+        resize_keyboard=True,
+    )
+
+
+def admin_custom_menus_keyboard() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text=BTN_CUSTOM_MENU_ADD), KeyboardButton(text=BTN_CUSTOM_MENU_REMOVE)],
+            [KeyboardButton(text=BTN_CUSTOM_MENU_LIST), KeyboardButton(text=BTN_BACK)],
         ],
         resize_keyboard=True,
     )

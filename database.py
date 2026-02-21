@@ -82,6 +82,14 @@ class Database:
                 value TEXT
             );
 
+            CREATE TABLE IF NOT EXISTS custom_menus (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                button_text TEXT NOT NULL UNIQUE,
+                response_text TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS payments (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_tg_id INTEGER NOT NULL,
@@ -226,6 +234,57 @@ class Database:
     def remove_channel(self, channel_id: int) -> int:
         cur = self._execute("DELETE FROM channels WHERE id = ?", (channel_id,))
         return cur.rowcount
+
+    def list_custom_menus(self) -> List[sqlite3.Row]:
+        return self._fetchall(
+            """
+            SELECT id, button_text, response_text, created_at, updated_at
+            FROM custom_menus
+            ORDER BY id ASC
+            """
+        )
+
+    def save_custom_menu(self, button_text: str, response_text: str) -> bool:
+        row = self._fetchone(
+            "SELECT id FROM custom_menus WHERE button_text = ? LIMIT 1",
+            (button_text,),
+        )
+        now = utc_now()
+        if row:
+            self._execute(
+                """
+                UPDATE custom_menus
+                SET button_text = ?, response_text = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (button_text, response_text, now, int(row["id"])),
+            )
+            return False
+
+        self._execute(
+            """
+            INSERT INTO custom_menus(button_text, response_text, created_at, updated_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (button_text, response_text, now, now),
+        )
+        return True
+
+    def remove_custom_menu(self, menu_id: int) -> int:
+        cur = self._execute("DELETE FROM custom_menus WHERE id = ?", (menu_id,))
+        return cur.rowcount
+
+    def get_custom_menu_by_button(self, button_text: str) -> Optional[sqlite3.Row]:
+        return self._fetchone(
+            """
+            SELECT id, button_text, response_text
+            FROM custom_menus
+            WHERE button_text = ?
+            ORDER BY id ASC
+            LIMIT 1
+            """,
+            (button_text,),
+        )
 
     def add_card(self, owner_name: str, card_number: str, activate: bool) -> int:
         if activate:

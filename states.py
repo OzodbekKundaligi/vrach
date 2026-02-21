@@ -17,6 +17,10 @@ class AdminStates(StatesGroup):
     waiting_suspicious_threshold = State()
     waiting_inbox_chat_id = State()
 
+    waiting_custom_menu_name = State()
+    waiting_custom_menu_text = State()
+    waiting_custom_menu_delete = State()
+
 
 class UserStates(StatesGroup):
     waiting_first_name = State()

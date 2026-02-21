@@ -30,7 +30,11 @@ from keyboards import (
     BTN_CHANNEL_LIST,
     BTN_CHANNEL_REMOVE,
     BTN_CHANNELS,
+    BTN_CUSTOM_MENU_ADD,
+    BTN_CUSTOM_MENU_LIST,
+    BTN_CUSTOM_MENU_REMOVE,
     BTN_EXIT,
+    BTN_MENUS,
     BTN_SETTING_INSTAGRAM,
     BTN_SETTING_INBOX,
     BTN_SETTING_LIST,
@@ -40,6 +44,7 @@ from keyboards import (
     admin_admins_menu_keyboard,
     admin_cards_menu_keyboard,
     admin_channels_menu_keyboard,
+    admin_custom_menus_keyboard,
     admin_entry_keyboard,
     admin_main_menu_keyboard,
     admin_settings_menu_keyboard,
@@ -247,9 +252,11 @@ DELETE_BUTTON_TEXTS = {
 
 
 def user_menu_keyboard(db: Database, user_id: int):
+    extra_buttons = [str(row["button_text"]) for row in db.list_custom_menus()]
     return user_main_menu_keyboard(
         t(db, user_id, "menu_profile_btn"),
         t(db, user_id, "menu_delete_btn"),
+        extra_buttons=extra_buttons,
     )
 
 
@@ -325,6 +332,17 @@ def format_admins_text(admin_ids: List[int]) -> str:
     for admin_id in admin_ids:
         lines.append(str(admin_id))
     return "\n".join(lines)
+
+
+def format_custom_menus_text(menus: List[object]) -> str:
+    if not menus:
+        return "Menyular yo'q."
+    lines = ["Menyular ro'yxati:"]
+    for row in menus:
+        lines.append(
+            f"{row['id']}. {h(row['button_text'])}\nJavob: {h(row['response_text'])}"
+        )
+    return "\n\n".join(lines)
 
 
 def format_settings_text(db: Database) -> str:
@@ -977,6 +995,46 @@ def register_handlers(dp: Dispatcher, db: Database, config: Config) -> None:
             reply_markup=admin_admins_menu_keyboard(),
         )
 
+    @dp.message(lambda m: bool(m.text) and m.text.strip().casefold() == BTN_MENUS.casefold())
+    async def admin_menu_custom(message: Message, state: FSMContext) -> None:
+        if not message.from_user or not db.is_admin(message.from_user.id):
+            return
+        await state.clear()
+        await message.answer(
+            format_custom_menus_text(db.list_custom_menus()),
+            reply_markup=admin_custom_menus_keyboard(),
+        )
+
+    @dp.message(lambda m: bool(m.text) and m.text.strip().casefold() == BTN_CUSTOM_MENU_LIST.casefold())
+    async def admin_custom_menu_list_action(message: Message, state: FSMContext) -> None:
+        if not message.from_user or not db.is_admin(message.from_user.id):
+            return
+        await state.clear()
+        await message.answer(
+            format_custom_menus_text(db.list_custom_menus()),
+            reply_markup=admin_custom_menus_keyboard(),
+        )
+
+    @dp.message(lambda m: bool(m.text) and m.text.strip().casefold() == BTN_CUSTOM_MENU_ADD.casefold())
+    async def admin_custom_menu_add_action(message: Message, state: FSMContext) -> None:
+        if not message.from_user or not db.is_admin(message.from_user.id):
+            return
+        await state.set_state(AdminStates.waiting_custom_menu_name)
+        await message.answer(
+            "Yangi menyu nomini yuboring (tugmada chiqadigan yozuv).",
+            reply_markup=admin_custom_menus_keyboard(),
+        )
+
+    @dp.message(lambda m: bool(m.text) and m.text.strip().casefold() == BTN_CUSTOM_MENU_REMOVE.casefold())
+    async def admin_custom_menu_remove_action(message: Message, state: FSMContext) -> None:
+        if not message.from_user or not db.is_admin(message.from_user.id):
+            return
+        await state.set_state(AdminStates.waiting_custom_menu_delete)
+        await message.answer(
+            f"{format_custom_menus_text(db.list_custom_menus())}\n\nO'chirish uchun menyu ID yuboring.",
+            reply_markup=admin_custom_menus_keyboard(),
+        )
+
     @dp.message(lambda m: bool(m.text) and m.text.strip().casefold() == BTN_CHANNEL_LIST.casefold())
     async def admin_channel_list_action(message: Message, state: FSMContext) -> None:
         if not message.from_user or not db.is_admin(message.from_user.id):
@@ -1307,6 +1365,78 @@ def register_handlers(dp: Dispatcher, db: Database, config: Config) -> None:
         else:
             await message.answer("Admin topilmadi.", reply_markup=admin_admins_menu_keyboard())
 
+    @dp.message(AdminStates.waiting_custom_menu_name)
+    async def admin_custom_menu_name_state(message: Message, state: FSMContext) -> None:
+        if not message.from_user or not db.is_admin(message.from_user.id):
+            return
+        name = (message.text or "").strip()
+        if not name:
+            await message.answer("Menyu nomi bo'sh bo'lmasligi kerak.")
+            return
+        if len(name) > 64:
+            await message.answer("Menyu nomi 64 ta belgidan oshmasligi kerak.")
+            return
+        if name.casefold() in PROFILE_BUTTON_TEXTS or name.casefold() in DELETE_BUTTON_TEXTS:
+            await message.answer("Bu nom band. Iltimos boshqa nom kiriting.")
+            return
+
+        await state.update_data(custom_menu_name=name)
+        await state.set_state(AdminStates.waiting_custom_menu_text)
+        await message.answer("Endi shu tugma bosilganda chiqadigan matnni yuboring.")
+
+    @dp.message(AdminStates.waiting_custom_menu_text)
+    async def admin_custom_menu_text_state(message: Message, state: FSMContext) -> None:
+        if not message.from_user or not db.is_admin(message.from_user.id):
+            return
+        response_text = (message.text or "").strip()
+        if not response_text:
+            await message.answer("Javob matni bo'sh bo'lmasligi kerak.")
+            return
+        if len(response_text) > 4000:
+            await message.answer("Javob matni juda uzun. 4000 belgidan oshmasin.")
+            return
+
+        data = await state.get_data()
+        name = str(data.get("custom_menu_name", "")).strip()
+        if not name:
+            await state.clear()
+            await message.answer(
+                "Menyu nomi topilmadi. Qaytadan boshlang.",
+                reply_markup=admin_custom_menus_keyboard(),
+            )
+            return
+
+        created = db.save_custom_menu(name, response_text)
+        await state.clear()
+        status_text = "Menyu qo'shildi." if created else "Menyu yangilandi."
+        await message.answer(
+            f"{status_text}\n\n{format_custom_menus_text(db.list_custom_menus())}",
+            reply_markup=admin_custom_menus_keyboard(),
+        )
+
+    @dp.message(AdminStates.waiting_custom_menu_delete)
+    async def admin_custom_menu_delete_state(message: Message, state: FSMContext) -> None:
+        if not message.from_user or not db.is_admin(message.from_user.id):
+            return
+        try:
+            menu_id = int((message.text or "").strip())
+        except ValueError:
+            await message.answer("ID raqam bo'lishi kerak.")
+            return
+
+        removed = db.remove_custom_menu(menu_id)
+        await state.clear()
+        if removed:
+            await message.answer(
+                f"Menyu o'chirildi.\n\n{format_custom_menus_text(db.list_custom_menus())}",
+                reply_markup=admin_custom_menus_keyboard(),
+            )
+        else:
+            await message.answer(
+                "Menyu topilmadi.",
+                reply_markup=admin_custom_menus_keyboard(),
+            )
+
     @dp.message(AdminStates.waiting_instagram_url)
     async def admin_set_instagram_state(message: Message, state: FSMContext) -> None:
         if not message.from_user or not db.is_admin(message.from_user.id):
@@ -1404,6 +1534,43 @@ def register_handlers(dp: Dispatcher, db: Database, config: Config) -> None:
         await state.clear()
         db.delete_user_data(user_id)
         await message.answer(deleted_text, reply_markup=remove_reply_keyboard())
+
+    @dp.message(lambda m: bool(m.text) and bool(db.get_custom_menu_by_button((m.text or "").strip())))
+    async def user_custom_menu_text(message: Message, state: FSMContext) -> None:
+        if message.chat.type != "private" or not message.from_user:
+            return
+        if db.is_admin(message.from_user.id):
+            return
+        if await state.get_state():
+            return
+
+        channels = db.list_channels()
+        missing = await get_missing_channels(message.bot, message.from_user.id, channels)
+        if missing:
+            await send_subscription_prompt(message, db, missing)
+            return
+
+        if not db.get_user_language(message.from_user.id):
+            await message.answer(
+                t(db, message.from_user.id, "lang_prompt"),
+                reply_markup=language_select_keyboard(),
+            )
+            return
+
+        if not db.is_user_registered(message.from_user.id):
+            await message.answer(t(db, message.from_user.id, "must_register"))
+            return
+
+        menu = db.get_custom_menu_by_button((message.text or "").strip())
+        if not menu:
+            return
+
+        await state.clear()
+        await message.answer(
+            str(menu["response_text"]),
+            parse_mode=None,
+            reply_markup=user_menu_keyboard(db, message.from_user.id),
+        )
 
     @dp.callback_query(F.data.startswith("user:profile:edit:"))
     async def user_profile_edit_callback(callback: CallbackQuery, state: FSMContext) -> None:
