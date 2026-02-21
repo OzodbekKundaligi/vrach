@@ -1354,6 +1354,9 @@ def register_handlers(dp: Dispatcher, db: Database, config: Config) -> None:
         if admin_id == config.super_admin_id:
             await message.answer("SUPER_ADMIN_ID ni o'chirib bo'lmaydi.")
             return
+        if config.admin2_id is not None and admin_id == config.admin2_id:
+            await message.answer("ADMIN2_ID ni o'chirib bo'lmaydi.")
+            return
 
         removed = db.remove_admin(admin_id)
         await state.clear()
@@ -1826,6 +1829,8 @@ async def run_bot() -> None:
     config = load_config()
     db = Database(config.db_path)
     db.ensure_super_admin(config.super_admin_id)
+    if config.admin2_id is not None:
+        db.add_admin(config.admin2_id)
 
     bot = Bot(
         token=config.bot_token,
